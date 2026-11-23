@@ -197,7 +197,7 @@ def block_entropy_brute_force(p):
 
     return S1, S2
 
-def block_entropy(p, L):
+def block_entropy_expensive(p, L):
 
     # uses B0 amd B1 straight
     # if i wanted to use right canonical form, would get Kx and compute Vl and Vr of transfer matrix built of Kx
@@ -246,34 +246,125 @@ def block_entropy(p, L):
 
     return S_L
 
+def plot_block_entropy(L, fn):
+    L = range(1, L)
+    S1 = []
+    Cq1 = []
+    for l in L:
+        S1.append(fn(0.1, l))
+        Cq1.append(2*entropy(0.1))
 
-# L = [1, 2]
-# S1 = []
-# Cq1 = []
-# for l in L:
-#     S1.append(block_entropy(0.1, l))
-#     Cq1.append(2*entropy(0.1))
+    S2 = []
+    Cq2 = []
+    for l in L:
+        S2.append(fn(0.6, l))
+        Cq2.append(2*entropy(0.6))
 
-# S2 = []
-# Cq2 = []
-# for l in L:
-#     S2.append(block_entropy(0.6, l))
-#     Cq2.append(2*entropy(0.6))
+    S3 = []
+    Cq3 = []
+    for l in L:
+        S3.append(fn(0.8, l))
+        Cq3.append(2*entropy(0.8))
 
-# S3 = []
-# Cq3 = []
-# for l in L:
-#     S3.append(block_entropy(0.8, l))
-#     Cq3.append(2*entropy(0.8))
+
+    plt.figure(figsize=(6,4))
+    plt.plot(L, S1, color='blue', marker='o', lw=2, linestyle='None', label='p=0.1')
+    plt.plot(L, Cq1, color='black', linestyle='--', lw=2)
+    plt.plot(L, S2, color='red', marker='o', lw=2, linestyle='None', label='p=0.6')
+    plt.plot(L, Cq2, color='black', linestyle='--', lw=2)
+    plt.plot(L, S3, color='green', marker='o', lw=2, linestyle='None', label='p=0.8')
+    plt.plot(L, Cq3, color='black', linestyle='--', lw=2)
+    plt.xlabel(r'$L$')
+    plt.xscale('log')
+    plt.ylabel(r'$S(\rho)$')
+    plt.legend()
+    plt.title('QPC')
+    plt.grid(True)
+    plt.show()
+
+    return None
+
+#plot_block_entropy(0.6, 3)
+
+
+
+# Isometry!
+
+###############################
+# B0 = np.array([[np.sqrt(p), np.sqrt(1-p)], [0, 0]])
+# B1 = np.array([[0, 0], [np.sqrt(1-p), np.sqrt(p)]])
+
+# Bx = np.array([B0, B1])  # xij
+
+# VL, VR, Kx = QPC(p)
+# sigma = VL
+
+# p, U = np.linalg.eigh(sigma)
+
+# psi = np.zeros(4, dtype=complex)
+
+# for j in range(2):
+#     ket_j = U[:, j]
+#     psi += np.sqrt(p[j]) * np.kron(ket_j, ket_j)
+
+
+# psi = psi.reshape(2,2)
+# L1 = np.einsum('ij, xjk -> xik', psi, Bx)
+# P1 = np.einsum('xij, xkl -> ijkl', L1, L1).reshape(4,4)
+
+# L2 = np.einsum('xij, yjk -> xyik', L1, Bx)
+# P2 = np.einsum('xij, xkl -> ijkl', L2, L2).reshape(4,4)
+
+
+
+
+def contract_E(E, L):
+    state = E.copy()
+    for _ in range(1, L):
+        state = np.einsum('', state, E)
+    return state
+
+def block_entropy_cheap(p, L):
+
+    B0 = np.array([[np.sqrt(p), np.sqrt(1-p)], [0, 0]])
+    B1 = np.array([[0, 0], [np.sqrt(1-p), np.sqrt(p)]])
+
+    Bx = np.array([B0, B1])  # xij
+
+    E = np.einsum('', Bx, Bx.conj())
+
+
+    sigma, VR, Kx = QPC(p)
+
+    p, U = np.linalg.eigh(sigma)
+
+    psi = np.zeros(4, dtype=complex)
+
+    for j in range(2):
+        ket_j = U[:, j]
+        psi += np.sqrt(p[j]) * np.kron(ket_j, ket_j)
+
+    psi = psi.reshape(2,2)
+
+    PSI = np.einsum('', psi, psi)
+
+    Es = contract_E(E, L)
+    state = np.einsum('', PSI, Es)
+    
+
+    S = entropy_vn(Qobj(state.reshape(4,4)), 2)
+
+    return S
+
+print(block_entropy_cheap(0.1, 2))
+print(block_entropy_cheap(0.1, 7))
+    
+
+    
 
 
 # plt.figure(figsize=(6,4))
-# plt.plot(L, S1, color='blue', marker='o', lw=2, linestyle='None', label='p=0.1')
-# plt.plot(L, Cq1, color='black', linestyle='--', lw=2)
-# plt.plot(L, S2, color='red', marker='o', lw=2, linestyle='None', label='p=0.6')
-# plt.plot(L, Cq2, color='black', linestyle='--', lw=2)
-# plt.plot(L, S3, color='green', marker='o', lw=2, linestyle='None', label='p=0.8')
-# plt.plot(L, Cq3, color='black', linestyle='--', lw=2)
+# plt.plot(L, Ss, color='purple', marker='o', lw=2, linestyle='None', label='p=0.1')
 # plt.xlabel(r'$L$')
 # plt.xscale('log')
 # plt.ylabel(r'$S(\rho)$')
@@ -281,30 +372,3 @@ def block_entropy(p, L):
 # plt.title('QPC')
 # plt.grid(True)
 # plt.show()
-
-
-
-
-
-
-# Naive approach: construct rho_L
-
-# Cheaper approach: evolve memory system and take tensor product for entropy
-
-# define B
-# build transfer matrix
-# left and right leading eigvects and vals
-# reshape into 2x2???
-# canonical form
-# entropy
-# kruas operators define isometry, but not uniquely
-
-p=0.6
-B0 = np.array([[np.sqrt(p), np.sqrt(1-p)], [0, 0]])
-B1 = np.array([[0, 0], [np.sqrt(1-p), np.sqrt(p)]])
-
-Bx = np.array([B0, B1])
-D = B0.shape[0]
-
-print(Bx.reshape(4, 2))
-print(np.sqrt(1-p))
