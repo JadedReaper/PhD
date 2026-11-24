@@ -246,7 +246,7 @@ def block_entropy_expensive(p, L):
 
     return S_L
 
-def plot_block_entropy(L, fn):
+def plot_block_entropy_expensive(L, fn):
     L = range(1, L)
     S1 = []
     Cq1 = []
@@ -318,11 +318,11 @@ def plot_block_entropy(L, fn):
 
 
 
-def contract_E(E, L):
-    state = E.copy()
-    for _ in range(1, L):
-        state = np.einsum('', state, E)
-    return state
+def SVD_entropy (Li):
+    rho1 = Li.transpose(0, 2,1, 3).reshape(4, 4)
+    lambdas = np.linalg.eigvalsh(rho1)
+    S = -np.sum(lambdas[lambdas > 1e-14] * np.log2(lambdas[lambdas > 1e-14]))
+    return S
 
 def block_entropy_cheap(p, L):
 
@@ -331,8 +331,7 @@ def block_entropy_cheap(p, L):
 
     Bx = np.array([B0, B1])  # xij
 
-    E = np.einsum('', Bx, Bx.conj())
-
+    E = np.einsum('xij, xkl -> ikjl', Bx, Bx.conj())
 
     sigma, VR, Kx = QPC(p)
 
@@ -346,29 +345,96 @@ def block_entropy_cheap(p, L):
 
     psi = psi.reshape(2,2)
 
-    PSI = np.einsum('', psi, psi)
+    PSI = np.einsum('ij,kl->ikjl', psi, psi)   # this should be |psi><psi| NOT |psi>|psi>
 
-    Es = contract_E(E, L)
-    state = np.einsum('', PSI, Es)
+    entropies = []
+    Li = PSI
+
+    for _ in range(L):
+        Li = np.einsum('ikjl,jlmn->ikmn', Li, E)
+
+        entropies.append(SVD_entropy(Li))
+
+    return PSI, entropies
+
+def plot_block_entropy_cheap(L):
+
+    Ls = range(1,L+1)
+
+    _, S1 = block_entropy_cheap(0.1, L)
+    _, S2 = block_entropy_cheap(0.6, L)
+    _, S3 = block_entropy_cheap(0.8, L)
+
+    Cq1 = []
+    for l in range(L):
+        Cq1.append(2*entropy(0.1))
+
+    Cq2 = []
+    for l in range(L):
+        Cq2.append(2*entropy(0.6))
+
+    Cq3 = []
+    for l in range(L):
+        Cq3.append(2*entropy(0.8))
+
+    plt.figure(figsize=(6,4))
+    plt.plot(Ls, S1, color='blue', marker='o', lw=2, linestyle='None', label='p=0.1')
+    plt.plot(Ls, Cq1, color='black', linestyle='--', lw=2)
+    plt.plot(Ls, S2, color='red', marker='o', lw=2, linestyle='None', label='p=0.6')
+    plt.plot(Ls, Cq2, color='black', linestyle='--', lw=2)
+    plt.plot(Ls, S3, color='green', marker='o', lw=2, linestyle='None', label='p=0.8')
+    plt.plot(Ls, Cq3, color='black', linestyle='--', lw=2)
+    plt.xlabel(r'$L$')
+    plt.xscale('log')
+    plt.ylabel(r'$S(\rho)$')
+    plt.legend()
+    plt.title('QPC')
+    plt.grid(True)
+    plt.show()
+
+    return None
+
+#plot_block_entropy_cheap(40)
     
+#i think tom fucked up.
+# i think that we still need to be thinking about x, x' not just the straight transfer matrix
+# how to implement?
 
-    S = entropy_vn(Qobj(state.reshape(4,4)), 2)
-
-    return S
-
-print(block_entropy_cheap(0.1, 2))
-print(block_entropy_cheap(0.1, 7))
+# compare this code to the expensive method using x=x', i expect the results will be equivalent?
     
+def entropy_rate (p, L):
 
-    
+    PSI, Splus = block_entropy_cheap(p, L+1)
+    S0 = SVD_entropy(PSI)
+    h1 = Splus[0] - S0
+    hs = [h1,]
 
+    for l in range(1, L):
+        h = Splus[l] - Splus[l-1]
+        hs.append(h)
 
-# plt.figure(figsize=(6,4))
-# plt.plot(L, Ss, color='purple', marker='o', lw=2, linestyle='None', label='p=0.1')
-# plt.xlabel(r'$L$')
-# plt.xscale('log')
-# plt.ylabel(r'$S(\rho)$')
-# plt.legend()
-# plt.title('QPC')
-# plt.grid(True)
-# plt.show()
+    return hs
+
+def plot_entropy_rate(L):
+
+    Ls = range(1,L+1)
+
+    h1 = entropy_rate(0.1, L)
+    h2 = entropy_rate(0.6, L)
+    h3 = entropy_rate(0.8, L)
+
+    plt.figure(figsize=(6,4))
+    plt.plot(Ls, h1, color='blue', marker='o', lw=2, linestyle='None', label='p=0.1')
+    plt.plot(Ls, h2, color='red', marker='o', lw=2, linestyle='None', label='p=0.6')
+    plt.plot(Ls, h3, color='green', marker='o', lw=2, linestyle='None', label='p=0.8')
+    plt.xlabel(r'$L$')
+    plt.xscale('log')
+    plt.ylabel(r'$S(\rho)$')
+    plt.legend()
+    plt.title('QPC')
+    plt.grid(True)
+    plt.show()
+
+    return None
+
+plot_entropy_rate(40)
